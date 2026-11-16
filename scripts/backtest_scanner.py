@@ -149,7 +149,7 @@ def normalize_fo(frame: dict, trade_day: date) -> tuple[pd.DataFrame, pd.DataFra
         df[dst] = pd.to_numeric(col(df, src), errors="coerce")
     df = df[(df["expiry"] >= trade_day) & (df["volume"].fillna(0) > 0)].copy()
 
-    fut = df[df["instrument"].eq("FUTSTK")].copy()
+    fut = df[df["instrument"].eq("STF")].copy()
     if not fut.empty:
         fut = fut.sort_values(["symbol","expiry","volume"], ascending=[True,True,False])
         fut = fut.drop_duplicates(["symbol"], keep="first")
@@ -157,7 +157,7 @@ def normalize_fo(frame: dict, trade_day: date) -> tuple[pd.DataFrame, pd.DataFra
         fut["oi_pct_change"] = fut["oi_change"] / (fut["oi"] - fut["oi_change"]).replace(0, pd.NA)
         fut = fut[["symbol","expiry","fut_return","oi","oi_change","oi_pct_change"]]
 
-    opt = df[df["instrument"].eq("OPTSTK")].copy()
+    opt = df[df["instrument"].eq("STO")].copy()
     if not opt.empty:
         # For each symbol use the nearest expiry and strikes within +/-5% of spot.
         opt["nearest_expiry"] = opt.groupby("symbol")["expiry"].transform("min")

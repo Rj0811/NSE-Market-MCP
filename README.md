@@ -104,3 +104,25 @@ A research-only backtest is available:
 The workflow retrieves five warm-up sessions, the requested signal sessions, and one following session for outcomes (26 complete sessions for the default 20-session test). NSE holidays and missing archive dates are skipped. If the required sessions are not available in the 90-calendar-day window, the run fails with a clear message.
 
 **Methodology limitations:** this version uses end-of-day data only. It does not have historical intraday option-chain snapshots or historical pre-open snapshots, and does not include brokerage, taxes, slippage, or execution simulation. The cash score and futures confirmation rule are fixed heuristics, not an optimized model. Treat results as an initial research test, not evidence of future profitability. NSE data is subject to NSE's applicable terms and rights.
+
+
+## Historical scanner V3: bullish/bearish shortlist and next-day range
+
+- Script: `scripts/backtest_scanner_v3.py`
+- Workflow: **NSE Historical Scanner Backtest V3** (`.github/workflows/backtest-scanner-v3.yml`)
+- Default: 40 signal sessions, 20 prior sessions for moving averages, volume and delivery baselines, plus the next session for outcomes.
+- Universe: cash EQ stocks with a matching active stock-futures contract on each signal date.
+- Score: 100 points across trend/20-session breakout (25), volume vs prior 20 sessions (20), delivery level/change vs the stock's own 20-session average (20), futures price/OI matrix (25), and options PCR context (10).
+- Outputs: top five bullish and bearish picks per signal session, full scored universe, and summary metrics.
+
+### Next-session opportunity metrics
+
+For each pick V3 reports overnight gap, open-to-close and previous-close-to-close return, plus maximum favourable and adverse excursion from the next session's open. It also reports whether the daily high/low reached +1%, +2% and +3% range thresholds for the relevant direction.
+
+**Important:** daily OHLC cannot show whether the high or low happened first. A +2% range hit is not proof that a +2% target was reached before a stop-loss. A true intraday target/stop simulation needs historical intraday candles (ideally 1-minute or 5-minute OHLCV) and an explicit entry, target, stop, costs and slippage model. V3 does not claim to simulate those fills.
+
+### Run from Android
+
+Open GitHub → this repository → Actions → **NSE Historical Scanner Backtest V3** → Run workflow. Choose 20 or 40 signal sessions. Download the completed artifact and start with `backtest-output-v3/summary.json`, `top5_bullish_v3.csv` and `top5_bearish_v3.csv`.
+
+V3 currently uses a 20-session breakout rather than a 52-week breakout. Futures rollover/basis and historical intraday options-chain changes are not scored until a validated historical data source is available. Results are research-only and exclude transaction costs, taxes and execution impact.

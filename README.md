@@ -86,10 +86,12 @@ A research-only backtest is available:
 
 - Script: `scripts/backtest_scanner.py`
 - Workflow: **NSE Historical Scanner Backtest** (`.github/workflows/backtest-scanner.yml`)
-- Default: 20 signal sessions, all stock symbols with active stock futures and matching cash EQ data
+- Default: 20 signal sessions, restricted to cash EQ stocks with a matching active stock-futures contract
 - Sources: NSE full cash bhavcopy with delivery and official UDiFF F&O bhavcopy archives
-- Signal components: cash price/volume/delivery (35 points), futures price/OI (35 points), near-ATM nearest-expiry options OI (30 points)
-- Outcomes: next-session close-to-close and open-to-close returns, hit rate, top-5/top-10 results, and all-universe comparison
+- V2 ranking: cash price/volume/delivery only (maximum 35 points)
+- Futures: positive futures price return is a confirmation gate; OI change is shown as context, not scored
+- Options: near-ATM option OI is retained for research context but excluded from ranking
+- Reports: top-5/top-10 confirmed picks, cash-only comparison, legacy three-module comparison, and active stock-futures universe baseline
 
 ### Run on GitHub from Android
 
@@ -97,8 +99,8 @@ A research-only backtest is available:
 2. Select **NSE Historical Scanner Backtest**.
 3. Tap **Run workflow** and leave sessions at **20**.
 4. Open the completed run and download `nse-scanner-backtest-...`.
-5. Start with `backtest-output/summary.json`, then inspect `top5_daily_picks.csv` and `all_scored_stocks.csv`.
+5. Start with `backtest-output/summary.json`, then inspect `top5_daily_picks_v2.csv` and `all_scored_stocks_v2.csv`.
 
-The workflow attempts to retrieve the latest 21 complete cash/F&O sessions (20 signal dates plus the following session for outcomes). NSE holidays and missing archive dates are skipped. If fewer than 21 complete sessions are available in the 90-calendar-day window, the run fails with a clear message.
+The workflow retrieves five warm-up sessions, the requested signal sessions, and one following session for outcomes (26 complete sessions for the default 20-session test). NSE holidays and missing archive dates are skipped. If the required sessions are not available in the 90-calendar-day window, the run fails with a clear message.
 
-**Methodology limitations:** this first version uses end-of-day data only. It does not have historical intraday option-chain snapshots or historical pre-open snapshots, and does not include brokerage, taxes, slippage, or execution simulation. The score is a fixed heuristic, not an optimized model. Treat results as an initial research test, not evidence of future profitability. NSE data is subject to NSE's applicable terms and rights.
+**Methodology limitations:** this version uses end-of-day data only. It does not have historical intraday option-chain snapshots or historical pre-open snapshots, and does not include brokerage, taxes, slippage, or execution simulation. The cash score and futures confirmation rule are fixed heuristics, not an optimized model. Treat results as an initial research test, not evidence of future profitability. NSE data is subject to NSE's applicable terms and rights.

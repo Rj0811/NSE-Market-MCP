@@ -1,4 +1,4 @@
-name: NSE Historical Scanner Backtest
+name: NSE Historical Scanner Backtest V2
 
 on:
   workflow_dispatch:
@@ -39,7 +39,7 @@ jobs:
       - name: Upload backtest reports
         uses: actions/upload-artifact@v4
         with:
-          name: nse-scanner-backtest-${{ github.run_number }}
+          name: nse-scanner-backtest-v2-${{ github.run_number }}
           path: |
             backtest-output/
             backtest-data/raw/

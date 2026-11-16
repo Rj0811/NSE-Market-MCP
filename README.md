@@ -126,3 +126,21 @@ For each pick V3 reports overnight gap, open-to-close and previous-close-to-clos
 Open GitHub → this repository → Actions → **NSE Historical Scanner Backtest V3** → Run workflow. Choose 20 or 40 signal sessions. Download the completed artifact and start with `backtest-output-v3/summary.json`, `top5_bullish_v3.csv` and `top5_bearish_v3.csv`.
 
 V3 currently uses a 20-session breakout rather than a 52-week breakout. Futures rollover/basis and historical intraday options-chain changes are not scored until a validated historical data source is available. Results are research-only and exclude transaction costs, taxes and execution impact.
+
+
+## Intraday Scanner V4: 1% target with stop-loss
+
+- Script: `scripts/backtest_scanner_v4.py`
+- Workflow: **NSE Intraday Scanner Backtest V4** (`.github/workflows/intraday-scanner-v4.yml`)
+- V4 first rebuilds the V3 daily top-five bullish and bearish shortlist, then retrieves 5-minute candles for those symbols.
+- Default target: 1.0%; default stop-loss: 0.5% (2:1 reward-to-risk before costs). Workflow also permits 0.75% or 1.0% stop-loss sensitivity tests.
+- Entry: after 09:30 IST, first 5-minute candle close above/below cumulative VWAP and above previous candle high/below previous candle low; entry is assumed at the next candle open.
+- Exit: target, stop-loss, or last available intraday candle close. If target and stop are both touched in one candle, stop-loss is assumed first.
+- Data source for intraday bars: Yahoo Finance chart endpoint, 5-minute interval. This is an unofficial third-party source and may have missing symbols/dates, adjustments, throttling or retention limits. Missing data is counted and reported.
+- Reports: `summary_v4.json`, `intraday_trades_v4.csv`, and `data_gaps_v4.json`.
+
+### Run from Android
+
+Open GitHub → Actions → **NSE Intraday Scanner Backtest V4** → Run workflow. Choose 40 sessions and the default 0.5% stop-loss. Download the artifact and inspect `backtest-output-v4/summary_v4.json` first.
+
+**Limitations:** the entry rule is a mechanical test, not a promise of fills. Results are gross and do not deduct brokerage, STT, exchange charges, GST, stamp duty, taxes or slippage. Check data coverage before interpreting the win rate. Use paper trading and validate the intraday feed independently before any live use.

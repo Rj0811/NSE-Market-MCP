@@ -11,7 +11,7 @@ import csv
 import json
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -64,12 +64,11 @@ def metadata_rows(payload: dict) -> list[dict]:
 
 
 def main() -> int:
+    payload = fetch_snapshot()
     now = datetime.now(IST)
     day_dir = ROOT / now.strftime("%Y") / now.strftime("%m")
     day_dir.mkdir(parents=True, exist_ok=True)
     stem = now.strftime("%Y-%m-%d")
-
-    payload = fetch_snapshot()
     rows = metadata_rows(payload)
     if not rows:
         raise RuntimeError("NSE response had no per-security metadata rows")
@@ -78,7 +77,7 @@ def main() -> int:
         "source": "NSE India pre-open market API",
         "source_url": API_URL,
         "retrieved_at_ist": now.isoformat(),
-        "retrieved_at_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "retrieved_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "record_count": len(rows),
         "data": payload,
     }

@@ -135,12 +135,12 @@ def normalize_cash(frame: dict) -> pd.DataFrame:
 
 def normalize_fo(frame: dict, trade_day: date) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = frame["fo"].copy()
-    required = ["TckrSymb","FinInstrmNm","XpryDt","ClsPric","OpnIntrst",
+    required = ["TckrSymb","FinInstrmTp","XpryDt","ClsPric","OpnIntrst",
                 "ChngInOpnIntrst","TtlTradgVol","UndrlygPric","OptnTp","StrkPric"]
     if not set(required).issubset(df.columns):
         raise ValueError(f"F&O file missing columns: {sorted(set(required)-set(df.columns))}")
     df["symbol"] = df["TckrSymb"].astype(str).str.strip().str.upper()
-    df["instrument"] = df["FinInstrmNm"].astype(str).str.strip().str.upper()
+    df["instrument"] = df["FinInstrmTp"].astype(str).str.strip().str.upper()
     df["expiry"] = pd.to_datetime(df["XpryDt"], errors="coerce", dayfirst=True).dt.date
     for src, dst in [("ClsPric","close"),("PrvsClsgPric","prev_close"),
                      ("OpnIntrst","oi"),("ChngInOpnIntrst","oi_change"),

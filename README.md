@@ -60,3 +60,21 @@ The workflow can also refresh the tool catalog on weekdays at 11:30 UTC (17:00 I
 ## Disclaimer
 
 For informational and educational use. Market data can be delayed, incomplete, or revised. Outputs are not investment advice or a recommendation to trade. Follow NSE's applicable terms and usage restrictions.
+
+
+## Pre-open history collector
+
+A separate GitHub Actions workflow archives the NSE pre-open API response and a normalized CSV:
+
+- Workflow: **NSE Pre-open Archive** (`.github/workflows/preopen-archive.yml`)
+- Collector: `scripts/preopen_collector.py`
+- Schedule: weekdays at 09:10 IST (03:40 UTC), best-effort GitHub Actions scheduling
+- Output: `data/preopen/YYYY/MM/YYYY-MM-DD.json` and `.csv`
+
+To run it manually on Android, open **Actions → NSE Pre-open Archive → Run workflow**. The workflow commits the retrieved snapshot into this repository.
+
+The collector reads the NSE pre-open page to establish a session, then requests the NSE pre-open market API. It saves the raw response as well as the per-security metadata rows. The saved timestamp is the collector retrieval time, not a guarantee of the exact exchange publication time.
+
+**Historical limitation:** this collector starts building an archive from the first successful run. It does not backfill old pre-open order-book snapshots. Public third-party archives may be incomplete and should be independently validated. GitHub scheduled runs can be delayed, so this is not a guaranteed 09:10 capture service.
+
+The pre-open auction is an indication of opening demand/supply, not a prediction of the full trading session. Orders can be modified or cancelled before matching. Use the data for research and paper testing only.

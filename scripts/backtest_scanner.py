@@ -294,7 +294,7 @@ def main():
         cursor -= timedelta(days=1)
 
     frames.sort(key=lambda x: x["date"])
-    if len(frames) < args.sessions + 1:
+    if len(frames) < required_sessions:
         raise RuntimeError(
             f"Only {len(frames)} complete sessions found; need {required_sessions} (5 warm-up + signals + outcome). "
             "NSE archive may be temporarily unavailable or the requested window too short."

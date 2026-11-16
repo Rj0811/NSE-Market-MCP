@@ -78,3 +78,27 @@ The collector reads the NSE pre-open page to establish a session, then requests 
 **Historical limitation:** this collector starts building an archive from the first successful run. It does not backfill old pre-open order-book snapshots. Public third-party archives may be incomplete and should be independently validated. GitHub scheduled runs can be delayed, so this is not a guaranteed 09:10 capture service.
 
 The pre-open auction is an indication of opening demand/supply, not a prediction of the full trading session. Orders can be modified or cancelled before matching. Use the data for research and paper testing only.
+
+
+## Historical scanner backtest
+
+A research-only backtest is available:
+
+- Script: `scripts/backtest_scanner.py`
+- Workflow: **NSE Historical Scanner Backtest** (`.github/workflows/backtest-scanner.yml`)
+- Default: 20 signal sessions, all stock symbols with active stock futures and matching cash EQ data
+- Sources: NSE full cash bhavcopy with delivery and official UDiFF F&O bhavcopy archives
+- Signal components: cash price/volume/delivery (35 points), futures price/OI (35 points), near-ATM nearest-expiry options OI (30 points)
+- Outcomes: next-session close-to-close and open-to-close returns, hit rate, top-5/top-10 results, and all-universe comparison
+
+### Run on GitHub from Android
+
+1. Open **Actions** in this repository.
+2. Select **NSE Historical Scanner Backtest**.
+3. Tap **Run workflow** and leave sessions at **20**.
+4. Open the completed run and download `nse-scanner-backtest-...`.
+5. Start with `backtest-output/summary.json`, then inspect `top5_daily_picks.csv` and `all_scored_stocks.csv`.
+
+The workflow attempts to retrieve the latest 21 complete cash/F&O sessions (20 signal dates plus the following session for outcomes). NSE holidays and missing archive dates are skipped. If fewer than 21 complete sessions are available in the 90-calendar-day window, the run fails with a clear message.
+
+**Methodology limitations:** this first version uses end-of-day data only. It does not have historical intraday option-chain snapshots or historical pre-open snapshots, and does not include brokerage, taxes, slippage, or execution simulation. The score is a fixed heuristic, not an optimized model. Treat results as an initial research test, not evidence of future profitability. NSE data is subject to NSE's applicable terms and rights.

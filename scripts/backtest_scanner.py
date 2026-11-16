@@ -225,31 +225,37 @@ def build_scores(frames: list[dict]) -> tuple[pd.DataFrame, list[str]]:
             columns={"open":"next_open","close":"next_close"})
         cash = cash.merge(fut, on="symbol", how="left").merge(opt, on="symbol", how="left")
         cash = cash.merge(nxt, on="symbol", how="inner")
+        # Restrict the universe to EQ stocks with an active stock-futures contract.
+        cash = cash[cash["fut_return"].notna()].copy()
         if cash.empty:
             continue
 
-        # Cash: 35 points
-        cash_score = (
+        # V2 ranking: cash-market strength only (0-35 points).
+        cash["cash_score"] = (
             (cash["day_return"] > 0).astype(int) * 12 +
             (cash["close_location"] >= 0.70).astype(int) * 8 +
             (cash["volume_ratio"] >= 1.5).astype(int) * 8 +
             ((cash["delivery_delta"] > 0) & (cash["delivery_pct"] >= 35)).astype(int) * 7
         )
-        # Futures: 35 points; positive price + positive OI = long buildup.
-        fut_score = (
-            (cash["fut_return"] > 0).astype("Int64").fillna(0) * 15 +
-            (cash["oi_change"] > 0).astype("Int64").fillna(0) * 10 +
+        # Futures are a confirmation gate, not an additive ranking score.
+        cash["futures_confirmation"] = cash["fut_return"] > 0
+        cash["futures_oi_confirmation"] = cash["oi_change"] > 0
+        # Retain legacy component scores for model comparison only.
+        cash["futures_score_legacy"] = (
+            (cash["fut_return"] > 0).astype(int) * 15 +
+            (cash["oi_change"] > 0).astype(int) * 10 +
             ((cash["fut_return"] > 0) & (cash["oi_change"] > 0)).astype(int) * 10
         )
-        # Options: 30 points; put OI adds / call OI reduces near ATM.
         pchg = cash["oi_change_pe"].fillna(0)
         cchg = cash["oi_change_ce"].fillna(0)
-        opt_score = (
+        cash["options_score_legacy"] = (
             (pchg > 0).astype(int) * 10 +
             (cchg < 0).astype(int) * 10 +
-            (cash["pcr"] >= 1.0).astype("Int64").fillna(0) * 10
+            (cash["pcr"] >= 1.0).fillna(False).astype(int) * 10
         )
-        cash["score"] = cash_score + fut_score + opt_score
+        cash["legacy_score"] = (cash["cash_score"] + cash["futures_score_legacy"] +
+                                cash["options_score_legacy"])
+        cash["score"] = cash["cash_score"]
         cash["signal_date"] = d.isoformat()
         cash["outcome_date"] = next_day.isoformat()
         cash["next_close_return"] = cash["next_close"] / cash["close"] - 1
@@ -276,8 +282,10 @@ def main():
     frames = []
     cursor = end
     start = end - timedelta(days=args.calendar_days)
-    print(f"Looking for {args.sessions + 1} complete cash/F&O sessions ending by {end}...")
-    while cursor >= start and len(frames) < args.sessions + 1:
+    print(f"Looking for {args.sessions + 6} sessions (5 warm-up + signals + outcome) ending by {end}...")
+    # Five warm-up sessions + requested signal sessions + one outcome session.
+    required_sessions = args.sessions + 6
+    while cursor >= start and len(frames) < required_sessions:
         if cursor.weekday() < 5:
             item = download_day(session, cursor)
             if item:
@@ -288,55 +296,78 @@ def main():
     frames.sort(key=lambda x: x["date"])
     if len(frames) < args.sessions + 1:
         raise RuntimeError(
-            f"Only {len(frames)} complete sessions found; need {args.sessions + 1}. "
+            f"Only {len(frames)} complete sessions found; need {required_sessions} (5 warm-up + signals + outcome). "
             "NSE archive may be temporarily unavailable or the requested window too short."
         )
 
     scored, _ = build_scores(frames)
     signal_dates = sorted(scored["signal_date"].unique())[-args.sessions:]
     scored = scored[scored["signal_date"].isin(signal_dates)].copy()
-    scored = scored.sort_values(["signal_date","score","volume_ratio"], ascending=[True,False,False])
+    scored = scored.sort_values(["signal_date","cash_score","volume_ratio"],
+                                ascending=[True,False,False])
+    confirmed = scored[scored["futures_confirmation"]].copy()
 
-    top5 = scored.groupby("signal_date", group_keys=False).head(5).copy()
-    top10 = scored.groupby("signal_date", group_keys=False).head(10).copy()
+    def metric_block(frame, n=5):
+        if frame.empty:
+            return {"picks": 0, "next_close_positive_hit_rate_pct": None,
+                    "avg_next_close_return_pct": None, "avg_next_open_to_close_pct": None}
+        picks = frame.sort_values(["signal_date","cash_score","volume_ratio"],
+                                  ascending=[True,False,False]).groupby(
+                                      "signal_date", group_keys=False).head(n)
+        return {
+            "picks": int(len(picks)),
+            "next_close_positive_hit_rate_pct": round(float(picks["next_day_positive"].mean()*100), 2),
+            "avg_next_close_return_pct": round(float(picks["next_close_return"].mean()*100), 3),
+            "avg_next_open_to_close_pct": round(float(picks["next_open_close_return"].mean()*100), 3),
+        }
+
+    top5 = confirmed.groupby("signal_date", group_keys=False).head(5).copy()
+    top10 = confirmed.groupby("signal_date", group_keys=False).head(10).copy()
+    legacy_ranked = scored.sort_values(["signal_date","legacy_score","volume_ratio"],
+                                       ascending=[True,False,False])
+    legacy_picks = legacy_ranked.groupby("signal_date", group_keys=False).head(5)
     summary = {
+        "model": "V2 cash-led ranking with positive-futures-price confirmation",
         "requested_sessions": args.sessions,
+        "warmup_sessions": 5,
         "tested_signal_sessions": len(signal_dates),
         "first_signal_date": signal_dates[0],
         "last_signal_date": signal_dates[-1],
-        "universe": "All symbols with active stock futures and matching cash EQ rows",
-        "score_max": 100,
-        "modules": {"cash": 35, "futures": 35, "options": 30},
-        "top5": {
-            "picks": int(len(top5)),
-            "next_close_positive_hit_rate_pct": round(float(top5["next_day_positive"].mean()*100),2),
-            "avg_next_close_return_pct": round(float(top5["next_close_return"].mean()*100),3),
-            "avg_next_open_to_close_pct": round(float(top5["next_open_close_return"].mean()*100),3),
-        },
-        "top10": {
-            "picks": int(len(top10)),
-            "next_close_positive_hit_rate_pct": round(float(top10["next_day_positive"].mean()*100),2),
-            "avg_next_close_return_pct": round(float(top10["next_close_return"].mean()*100),3),
-            "avg_next_open_to_close_pct": round(float(top10["next_open_close_return"].mean()*100),3),
-        },
-        "all_fno_universe": {
-            "observations": int(len(scored)),
-            "next_close_positive_hit_rate_pct": round(float(scored["next_day_positive"].mean()*100),2),
-            "avg_next_close_return_pct": round(float(scored["next_close_return"].mean()*100),3),
+        "universe": "Cash EQ stocks with a matching active stock-futures contract on each signal date",
+        "ranking_score": "Cash only: positive day return (12), close location >=70% (8), volume >=1.5x prior 5-session average (8), delivery improvement with delivery >=35% (7)",
+        "futures_rule": "Require positive stock-futures daily return; rising OI is context only, not required or scored",
+        "options_rule": "Options metrics retained for context only; excluded from ranking",
+        "top5": metric_block(confirmed, 5),
+        "top10": metric_block(confirmed, 10),
+        "comparisons": {
+            "cash_only_top5_no_futures_gate": metric_block(scored, 5),
+            "cash_ranked_top5_with_positive_futures_gate": metric_block(confirmed, 5),
+            "legacy_cash_futures_options_top5": {
+                "picks": int(len(legacy_picks)),
+                "next_close_positive_hit_rate_pct": round(float(legacy_picks["next_day_positive"].mean()*100), 2),
+                "avg_next_close_return_pct": round(float(legacy_picks["next_close_return"].mean()*100), 3),
+                "avg_next_open_to_close_pct": round(float(legacy_picks["next_open_close_return"].mean()*100), 3),
+            },
+            "active_stock_futures_universe": {
+                "observations": int(len(scored)),
+                "next_close_positive_hit_rate_pct": round(float(scored["next_day_positive"].mean()*100), 2),
+                "avg_next_close_return_pct": round(float(scored["next_close_return"].mean()*100), 3),
+                "avg_next_open_to_close_pct": round(float(scored["next_open_close_return"].mean()*100), 3),
+            },
         },
         "limitations": [
             "Daily end-of-day data only; no intraday option-chain snapshots.",
             "No historical pre-open snapshots included.",
             "No transaction costs, slippage, taxes, or execution simulation.",
-            "Delivery data is joined by symbol from the NSE full bhavcopy report.",
-            "First version uses a fixed heuristic score; weights are not optimized.",
+            "Five warm-up sessions are excluded from signal outcomes and used only for rolling averages.",
+            "The sample is small and may be regime-dependent; use a longer out-of-sample test.",
         ],
     }
 
     OUT.mkdir(parents=True, exist_ok=True)
-    top5.to_csv(OUT / "top5_daily_picks.csv", index=False)
-    top10.to_csv(OUT / "top10_daily_picks.csv", index=False)
-    scored.to_csv(OUT / "all_scored_stocks.csv", index=False)
+    top5.to_csv(OUT / "top5_daily_picks_v2.csv", index=False)
+    top10.to_csv(OUT / "top10_daily_picks_v2.csv", index=False)
+    scored.to_csv(OUT / "all_scored_stocks_v2.csv", index=False)
     (OUT / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (OUT / "data_coverage.json").write_text(json.dumps({
         "downloaded_sessions": [x["date"] for x in frames],

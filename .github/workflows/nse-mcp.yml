@@ -1,0 +1,88 @@
+name: NSE MCP
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Discover available tools or call one NSE tool"
+        required: true
+        type: choice
+        options:
+          - discover
+          - call
+        default: discover
+      server:
+        description: "NSE MCP server"
+        required: true
+        type: choice
+        options:
+          - both
+          - bhavcopy
+          - cmmkt
+        default: both
+      tool_name:
+        description: "Exact tool name (required for call mode; see tools-catalog.json)"
+        required: false
+        type: string
+      arguments_json:
+        description: 'Tool arguments as JSON, e.g. {"symbol":"RELIANCE"}'
+        required: false
+        type: string
+        default: "{}"
+  schedule:
+    - cron: "30 11 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nse-mcp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  run-nse-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run NSE MCP discovery or tool call
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_SERVER: ${{ inputs.server }}
+          INPUT_TOOL: ${{ inputs.tool_name }}
+          INPUT_ARGS: ${{ inputs.arguments_json }}
+        run: |
+          if [ "$EVENT_NAME" = "schedule" ]; then
+            python scripts/nse_mcp.py --mode discover --server both --output output/tools-catalog.json
+          elif [ "$INPUT_MODE" = "call" ]; then
+            if [ "$INPUT_SERVER" = "both" ]; then
+              echo "Choose bhavcopy or cmmkt for call mode."
+              exit 1
+            fi
+            python scripts/nse_mcp.py --mode call --server "$INPUT_SERVER" --tool "$INPUT_TOOL" --args "$INPUT_ARGS" --output output/nse-result.json
+          else
+            python scripts/nse_mcp.py --mode discover --server "$INPUT_SERVER" --output output/tools-catalog.json
+          fi
+
+      - name: Upload NSE MCP output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nse-mcp-output-${{ github.run_number }}
+          path: output/
+          if-no-files-found: warn
+          retention-days: 7

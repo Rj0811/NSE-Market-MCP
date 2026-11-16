@@ -85,7 +85,7 @@ The pre-open auction is an indication of opening demand/supply, not a prediction
 A research-only backtest is available:
 
 - Script: `scripts/backtest_scanner.py`
-- Workflow: **NSE Historical Scanner Backtest** (`.github/workflows/backtest-scanner.yml`)
+- Workflow: **NSE Historical Scanner Backtest V2** (`.github/workflows/backtest-scanner.yml`)
 - Default: 20 signal sessions, restricted to cash EQ stocks with a matching active stock-futures contract
 - Sources: NSE full cash bhavcopy with delivery and official UDiFF F&O bhavcopy archives
 - V2 ranking: cash price/volume/delivery only (maximum 35 points)
@@ -96,9 +96,9 @@ A research-only backtest is available:
 ### Run on GitHub from Android
 
 1. Open **Actions** in this repository.
-2. Select **NSE Historical Scanner Backtest**.
+2. Select **NSE Historical Scanner Backtest V2**.
 3. Tap **Run workflow** and leave sessions at **20**.
-4. Open the completed run and download `nse-scanner-backtest-...`.
+4. Open the completed run and download `nse-scanner-backtest-v2-...`.
 5. Start with `backtest-output/summary.json`, then inspect `top5_daily_picks_v2.csv` and `all_scored_stocks_v2.csv`.
 
 The workflow retrieves five warm-up sessions, the requested signal sessions, and one following session for outcomes (26 complete sessions for the default 20-session test). NSE holidays and missing archive dates are skipped. If the required sessions are not available in the 90-calendar-day window, the run fails with a clear message.
